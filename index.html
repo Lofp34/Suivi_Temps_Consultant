@@ -92,6 +92,86 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+
+        select option {
+            padding: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+            margin-left: 8px;
+        }
+
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+
+        .container-inputs {
+            max-width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        select, input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            max-width: 100%;
+        }
+
+        .log-card {
+            background: #f9f9f9;
+            margin-bottom: 8px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .log-card:hover {
+            background: #f0f0f0;
+        }
+
+        .log-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-sessions {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+            font-size: 0.9em;
+            display: none;
+        }
+
+        .log-session {
+            padding: 5px 0;
+            color: #666;
+        }
+
+        .delete-log-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 5px 10px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
+        .delete-log-btn:hover {
+            background-color: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -100,13 +180,15 @@
 
         <div class="timer" id="ledTimer">00:00:00</div>
 
-        <label for="project">Select or Add Project:</label>
-        <select id="project">
-            <option value="" disabled selected>-- Select a project --</option>
-        </select>
+        <div class="container-inputs">
+            <label for="project">Select or Add Project:</label>
+            <select id="project">
+                <option value="" disabled selected>-- Select a project --</option>
+            </select>
 
-        <input type="text" id="newProject" placeholder="Enter a new project name">
-        <button id="addProject">Add Project</button>
+            <input type="text" id="newProject" placeholder="Enter a new project name">
+            <button id="addProject">Add Project</button>
+        </div>
 
         <button id="startTimer">Start Timer</button>
         <button id="stopTimer" disabled>Stop Timer</button>
@@ -134,17 +216,23 @@
         let currentProject = null;
         let startTime = null;
 
-        // Timer Variables
+        // Modifier ces variables
         let elapsedSeconds = 0;
+        let lastUpdate = null;  // Nouvelle variable
 
         // Add project to dropdown
         function addProject(name) {
             if (!projects.includes(name)) {
                 projects.push(name);
+                
+                // Créer l'option avec un conteneur div pour le texte et le bouton
                 const option = document.createElement('option');
                 option.value = name;
                 option.textContent = name;
+                
+                // Ajouter l'option au dropdown
                 projectDropdown.appendChild(option);
+                saveToLocalStorage();
             }
         }
 
@@ -166,10 +254,11 @@
             }
 
             currentProject = selectedProject;
-            startTime = new Date();
+            startTime = Date.now();  // Utiliser Date.now() au lieu de new Date()
+            lastUpdate = startTime;  // Initialiser lastUpdate
 
             if (!timer) {
-                timer = setInterval(updateTimer, 1000);
+                timer = setInterval(updateTimer, 100);  // Mise à jour plus fréquente
             }
 
             startTimerButton.disabled = true;
@@ -182,7 +271,7 @@
                 clearInterval(timer);
                 timer = null;
 
-                const endTime = new Date();
+                const endTime = Date.now();
                 const timeSpent = Math.floor((endTime - startTime) / 1000);
 
                 const today = new Date().toISOString().split('T')[0];
@@ -195,11 +284,24 @@
                     logs[today][currentProject] = 0;
                 }
 
+                // Ajouter le temps total
                 logs[today][currentProject] += timeSpent;
 
+                // Enregistrer la session détaillée
+                if (!logs[today][currentProject + '_sessions']) {
+                    logs[today][currentProject + '_sessions'] = [];
+                }
+
+                logs[today][currentProject + '_sessions'].push({
+                    start: startTime,
+                    end: endTime,
+                    duration: timeSpent
+                });
+
                 elapsedSeconds = 0;
-                updateLogList();
                 updateTimerDisplay();
+                updateLogList();
+                saveToLocalStorage();
 
                 startTimerButton.disabled = false;
                 stopTimerButton.disabled = true;
@@ -213,9 +315,64 @@
 
             if (logs[today]) {
                 for (const project in logs[today]) {
+                    // Ignorer les entrées "_sessions"
+                    if (project.endsWith('_sessions')) continue;
+                    
                     const time = logs[today][project];
+                    
+                    // Créer la carte
                     const li = document.createElement('li');
-                    li.textContent = `${project}: ${formatTime(time)}`;
+                    li.className = 'log-card';
+                    
+                    // En-tête de la carte
+                    const header = document.createElement('div');
+                    header.className = 'log-card-header';
+                    header.innerHTML = `
+                        <span>${project}: ${formatTime(time)}</span>
+                        <span>▼</span>
+                    `;
+                    
+                    // Conteneur des sessions
+                    const sessionsContainer = document.createElement('div');
+                    sessionsContainer.className = 'log-sessions';
+                    
+                    // Si nous avons des sessions détaillées pour ce projet
+                    if (logs[today][project + '_sessions']) {
+                        logs[today][project + '_sessions'].forEach(session => {
+                            const sessionDiv = document.createElement('div');
+                            sessionDiv.className = 'log-session';
+                            const startTime = new Date(session.start).toLocaleTimeString();
+                            const endTime = new Date(session.end).toLocaleTimeString();
+                            sessionDiv.textContent = `${startTime} - ${endTime} (${formatTime(session.duration)})`;
+                            sessionsContainer.appendChild(sessionDiv);
+                        });
+                    }
+                    
+                    // Bouton de suppression
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'delete-log-btn';
+                    deleteBtn.textContent = 'Delete Log';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete all logs for "${project}" today?`)) {
+                            delete logs[today][project];
+                            delete logs[today][project + '_sessions'];
+                            saveToLocalStorage();
+                            updateLogList();
+                        }
+                    };
+                    sessionsContainer.appendChild(deleteBtn);
+                    
+                    li.appendChild(header);
+                    li.appendChild(sessionsContainer);
+                    
+                    // Gestionnaire de clic pour l'expansion
+                    li.onclick = () => {
+                        const isExpanded = sessionsContainer.style.display === 'block';
+                        sessionsContainer.style.display = isExpanded ? 'none' : 'block';
+                        header.querySelector('span:last-child').textContent = isExpanded ? '▼' : '▲';
+                    };
+                    
                     logList.appendChild(li);
                 }
             } else {
@@ -223,9 +380,11 @@
             }
         }
 
-        // Update the LED Timer Display
+        // Modifier la fonction updateTimer
         function updateTimer() {
-            elapsedSeconds++;
+            const now = Date.now();
+            const totalElapsed = Math.floor((now - startTime) / 1000); // Calculer depuis le début
+            elapsedSeconds = totalElapsed;
             updateTimerDisplay();
         }
 
@@ -242,7 +401,90 @@
         }
 
         // Initialize with an empty project list
-        addProject('-- Select a project --');
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            if (projects.length === 0) {
+                addProject('-- Select a project --');
+            }
+        });
+
+        // Après la déclaration des variables initiales, ajoutons les fonctions de persistance
+        function saveToLocalStorage() {
+            localStorage.setItem('timeTracker_projects', JSON.stringify(projects));
+            localStorage.setItem('timeTracker_logs', JSON.stringify(logs));
+        }
+
+        function loadFromLocalStorage() {
+            const savedProjects = localStorage.getItem('timeTracker_projects');
+            const savedLogs = localStorage.getItem('timeTracker_logs');
+            
+            if (savedProjects) {
+                projects = JSON.parse(savedProjects);
+                // Recréer les options du dropdown
+                projectDropdown.innerHTML = '<option value="" disabled selected>-- Select a project --</option>';
+                projects.forEach(project => {
+                    if (project !== '-- Select a project --') {
+                        const option = document.createElement('option');
+                        option.value = project;
+                        option.textContent = project;
+                        projectDropdown.appendChild(option);
+                    }
+                });
+            }
+            
+            if (savedLogs) {
+                logs = JSON.parse(savedLogs);
+                updateLogList();
+            }
+        }
+
+        // Ajouter la fonction de suppression de projet
+        function deleteProject(projectName) {
+            if (confirm(`Are you sure you want to delete project "${projectName}"?`)) {
+                const index = projects.indexOf(projectName);
+                if (index > -1) {
+                    projects.splice(index, 1);
+                    
+                    // Supprimer du dropdown
+                    const options = projectDropdown.getElementsByTagName('option');
+                    for (let option of options) {
+                        if (option.value === projectName) {
+                            projectDropdown.removeChild(option);
+                            break;
+                        }
+                    }
+                    
+                    // Supprimer les logs associés
+                    for (let date in logs) {
+                        if (logs[date][projectName]) {
+                            delete logs[date][projectName];
+                        }
+                    }
+                    
+                    saveToLocalStorage();
+                    updateLogList();
+                }
+            }
+        }
+
+        // Ajouter un gestionnaire d'événements pour le dropdown
+        projectDropdown.addEventListener('mouseenter', function() {
+            const selectedProject = this.value;
+            if (selectedProject && selectedProject !== '-- Select a project --') {
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '×';
+                deleteButton.className = 'delete-project-btn';
+                deleteButton.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteProject(selectedProject);
+                };
+                
+                const projectLabel = document.querySelector(`option[value="${selectedProject}"]`);
+                if (projectLabel && !projectLabel.querySelector('.delete-project-btn')) {
+                    projectLabel.appendChild(deleteButton);
+                }
+            }
+        });
     </script>
 </body>
 </html>
