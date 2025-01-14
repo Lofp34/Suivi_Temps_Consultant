@@ -172,6 +172,97 @@
         .delete-log-btn:hover {
             background-color: #c82333;
         }
+
+        .custom-select-container {
+            position: relative;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .custom-select-header {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .custom-select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-top: 2px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .custom-select-option {
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .custom-select-option:hover {
+            background: #f0f0f0;
+        }
+
+        .delete-project-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 2px 8px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .delete-project-btn:hover {
+            background: #c82333;
+        }
+
+        .project-container {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .project-delete-btn {
+            position: absolute;
+            right: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            display: none;
+        }
+
+        .project-container:hover .project-delete-btn {
+            display: block;
+        }
+
+        .project-delete-btn:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -182,9 +273,12 @@
 
         <div class="container-inputs">
             <label for="project">Select or Add Project:</label>
-            <select id="project">
-                <option value="" disabled selected>-- Select a project --</option>
-            </select>
+            <div class="project-container">
+                <select id="project">
+                    <option value="" disabled selected>-- Select a project --</option>
+                </select>
+                <button class="project-delete-btn" id="deleteProject" style="display: none;">×</button>
+            </div>
 
             <input type="text" id="newProject" placeholder="Enter a new project name">
             <button id="addProject">Add Project</button>
@@ -203,6 +297,7 @@
 
     <script>
         const projectDropdown = document.getElementById('project');
+        const deleteProjectBtn = document.getElementById('deleteProject');
         const newProjectInput = document.getElementById('newProject');
         const addProjectButton = document.getElementById('addProject');
         const startTimerButton = document.getElementById('startTimer');
@@ -215,37 +310,79 @@
         let timer = null;
         let currentProject = null;
         let startTime = null;
-
-        // Modifier ces variables
         let elapsedSeconds = 0;
-        let lastUpdate = null;  // Nouvelle variable
+        let lastUpdate = null;
 
-        // Add project to dropdown
-        function addProject(name) {
-            if (!projects.includes(name)) {
-                projects.push(name);
-                
-                // Créer l'option avec un conteneur div pour le texte et le bouton
-                const option = document.createElement('option');
-                option.value = name;
-                option.textContent = name;
-                
-                // Ajouter l'option au dropdown
-                projectDropdown.appendChild(option);
-                saveToLocalStorage();
+        // Fonction pour mettre à jour la liste des projets
+        function updateProjectsList() {
+            // Sauvegarder la sélection actuelle
+            const currentSelection = projectDropdown.value;
+            
+            // Vider et recréer la liste
+            projectDropdown.innerHTML = '<option value="" disabled>-- Select a project --</option>';
+            
+            projects.forEach(project => {
+                if (project !== '-- Select a project --') {
+                    const option = document.createElement('option');
+                    option.value = project;
+                    option.textContent = project;
+                    projectDropdown.appendChild(option);
+                }
+            });
+
+            // Restaurer la sélection si possible
+            if (currentSelection && projects.includes(currentSelection)) {
+                projectDropdown.value = currentSelection;
+                deleteProjectBtn.style.display = 'block';
+            } else {
+                projectDropdown.selectedIndex = 0;
+                deleteProjectBtn.style.display = 'none';
             }
         }
 
-        // Add new project
-        addProjectButton.addEventListener('click', () => {
-            const newProject = newProjectInput.value.trim();
-            if (newProject) {
-                addProject(newProject);
-                newProjectInput.value = '';
+        // Gestionnaire de changement de sélection
+        projectDropdown.addEventListener('change', () => {
+            const selectedProject = projectDropdown.value;
+            deleteProjectBtn.style.display = selectedProject ? 'block' : 'none';
+        });
+
+        // Gestionnaire de suppression de projet
+        deleteProjectBtn.addEventListener('click', () => {
+            const projectToDelete = projectDropdown.value;
+            if (projectToDelete && confirm(`Are you sure you want to delete project "${projectToDelete}"?`)) {
+                const index = projects.indexOf(projectToDelete);
+                if (index > -1) {
+                    projects.splice(index, 1);
+                    
+                    // Supprimer les logs associés
+                    for (let date in logs) {
+                        if (logs[date][projectToDelete]) {
+                            delete logs[date][projectToDelete];
+                            delete logs[date][projectToDelete + '_sessions'];
+                        }
+                    }
+                    
+                    updateProjectsList();
+                    saveToLocalStorage();
+                    updateLogList();
+                }
             }
         });
 
-        // Start timer
+        // Modifier la fonction addProject
+        function addProject(name) {
+            if (!projects.includes(name)) {
+                projects.push(name);
+                updateProjectsList();
+                saveToLocalStorage();
+                
+                // Sélectionner automatiquement le nouveau projet
+                projectDropdown.value = name;
+                deleteProjectBtn.style.display = 'block';
+            }
+        }
+
+        // Modifier le gestionnaire du bouton Start Timer
         startTimerButton.addEventListener('click', () => {
             const selectedProject = projectDropdown.value;
             if (!selectedProject) {
@@ -254,15 +391,24 @@
             }
 
             currentProject = selectedProject;
-            startTime = Date.now();  // Utiliser Date.now() au lieu de new Date()
-            lastUpdate = startTime;  // Initialiser lastUpdate
+            startTime = Date.now();
+            lastUpdate = startTime;
 
             if (!timer) {
-                timer = setInterval(updateTimer, 100);  // Mise à jour plus fréquente
+                timer = setInterval(updateTimer, 100);
             }
 
             startTimerButton.disabled = true;
             stopTimerButton.disabled = false;
+        });
+
+        // Add new project
+        addProjectButton.addEventListener('click', () => {
+            const newProject = newProjectInput.value.trim();
+            if (newProject) {
+                addProject(newProject);
+                newProjectInput.value = '';
+            }
         });
 
         // Stop timer
@@ -403,9 +549,7 @@
         // Initialize with an empty project list
         document.addEventListener('DOMContentLoaded', () => {
             loadFromLocalStorage();
-            if (projects.length === 0) {
-                addProject('-- Select a project --');
-            }
+            updateProjectsList();
         });
 
         // Après la déclaration des variables initiales, ajoutons les fonctions de persistance
@@ -420,16 +564,7 @@
             
             if (savedProjects) {
                 projects = JSON.parse(savedProjects);
-                // Recréer les options du dropdown
-                projectDropdown.innerHTML = '<option value="" disabled selected>-- Select a project --</option>';
-                projects.forEach(project => {
-                    if (project !== '-- Select a project --') {
-                        const option = document.createElement('option');
-                        option.value = project;
-                        option.textContent = project;
-                        projectDropdown.appendChild(option);
-                    }
-                });
+                updateProjectsList();
             }
             
             if (savedLogs) {
@@ -437,54 +572,6 @@
                 updateLogList();
             }
         }
-
-        // Ajouter la fonction de suppression de projet
-        function deleteProject(projectName) {
-            if (confirm(`Are you sure you want to delete project "${projectName}"?`)) {
-                const index = projects.indexOf(projectName);
-                if (index > -1) {
-                    projects.splice(index, 1);
-                    
-                    // Supprimer du dropdown
-                    const options = projectDropdown.getElementsByTagName('option');
-                    for (let option of options) {
-                        if (option.value === projectName) {
-                            projectDropdown.removeChild(option);
-                            break;
-                        }
-                    }
-                    
-                    // Supprimer les logs associés
-                    for (let date in logs) {
-                        if (logs[date][projectName]) {
-                            delete logs[date][projectName];
-                        }
-                    }
-                    
-                    saveToLocalStorage();
-                    updateLogList();
-                }
-            }
-        }
-
-        // Ajouter un gestionnaire d'événements pour le dropdown
-        projectDropdown.addEventListener('mouseenter', function() {
-            const selectedProject = this.value;
-            if (selectedProject && selectedProject !== '-- Select a project --') {
-                const deleteButton = document.createElement('button');
-                deleteButton.textContent = '×';
-                deleteButton.className = 'delete-project-btn';
-                deleteButton.onclick = (e) => {
-                    e.stopPropagation();
-                    deleteProject(selectedProject);
-                };
-                
-                const projectLabel = document.querySelector(`option[value="${selectedProject}"]`);
-                if (projectLabel && !projectLabel.querySelector('.delete-project-btn')) {
-                    projectLabel.appendChild(deleteButton);
-                }
-            }
-        });
     </script>
 </body>
 </html>
